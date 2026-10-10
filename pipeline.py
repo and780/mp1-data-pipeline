@@ -3,6 +3,7 @@ import logging
 import sys
 from pathlib import Path
 from data_loaders import load_data
+from data_processor import process_data, create_cleaning_report
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def setup_logging(verbose=False):
 
     logging.basicConfig(
         level=level,
-        format="%(asctime)s %(levelname)s %(message)s",
+        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
         datefmt="%H:%M:%S"
     )
 
@@ -35,6 +36,12 @@ def parse_arguments():
         help="Path to the input file"
     )
 
+    parser.add_argument(
+    "--config",
+    required=True,
+    help="Path to the YAML configuration file"
+    )
+    
     #requires an output file
     parser.add_argument(
         "--output",
@@ -44,12 +51,7 @@ def parse_arguments():
     )
 
     #format: default set to csv
-    parser.add_argument(
-        "--format",
-        choices=["csv", "json"],
-        default="csv",
-        help="Output format"
-    )
+
 
     #show more details log when type -v
     parser.add_argument(
@@ -82,15 +84,42 @@ def main():
 
     logger.debug(
         f"Arguments parsed: input={args.input}, "
-        f"output={args.output}, format={args.format}"
+        f"output={args.output}, config={args.config}"
     )
     if not validate_input(args.input):
+        sys.exit(1)
+
+    if not validate_input(args.config):
         sys.exit(1)
         
     try:
         data = load_data(args.input)
+        config = load_data(args.config)
     except ValueError:
         sys.exit(1)
+
+    # Save a copy of the original data
+    df_before = data.copy()
+
+    # Process the data
+    try:
+        cleaned_data = process_data(data, config)
+    except ValueError:
+        sys.exit(1)
+    # Create and print the cleaning report
+    report = create_cleaning_report(df_before, cleaned_data)
+    print(report)
+
+    # Log processing results
+    logger.info(
+        f"Processing complete: {len(df_before)} → {len(cleaned_data)} rows"
+    )
+
+    # Save the cleaned data
+    cleaned_data.to_csv(args.output, index=False)
+
+    # Log saving results
+    logger.info(f"Saved cleaned data to {args.output}")
 
     
 
